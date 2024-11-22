@@ -1,0 +1,77 @@
+---
+title: "241 Randomization Inference"
+author: "Monica Napoles"
+date: "2024-11-20"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+donations <- read.csv("/Users/monicanapoles/Downloads/alk_donations_total_ex_fee.csv", stringsAsFactors = FALSE)
+
+donations
+
+```
+```{r}
+#keep only donations 
+donations_filtered <- donations %>% filter(!is.na(donation_amount_ex_fee))
+
+donations_filtered
+```
+
+
+```{r}
+#assign binary to treatment and control 
+#calculate poportions of exact matches
+proportions <- donations_filtered %>%
+  mutate(exact_match = ifelse((test_name == "Test A" & donation_amount_ex_fee == 10) |
+                              (test_name == "Test B" & donation_amount_ex_fee == 13), 1, 0)) %>%
+  group_by(test_name) %>%
+  summarise(proportion_exact = mean(exact_match))
+
+# number of donations in each group
+group_sizes <- list("Test A" = 7, "Test B" = 5)
+```
+
+```{r}
+simulate_exact_matches <- function(simulations = 1000, group_sizes) {
+  sim_results <- data.frame(Test_A = numeric(simulations), Test_B = numeric(simulations))
+  
+  for (sim in 1:simulations) {
+    # Test A
+    sim_results$Test_A[sim] <- mean(runif(group_sizes[["Test A"]]) < proportions$proportion_exact[1])
+    
+    # Test B
+    sim_results$Test_B[sim] <- mean(runif(group_sizes[["Test B"]]) < proportions$proportion_exact[2])
+  }
+  
+  sim_results <- sim_results %>%
+    mutate(Test_Effect = Test_A - Test_B)
+  
+  return(sim_results)
+}
+
+```
+
+```{r}
+# Simulate
+n_simulations <- 1000
+simulated_results <- simulate_exact_matches(n_simulations, group_sizes)
+
+observed_test_effect <- 
+  proportions$proportion_exact[1] - proportions$proportion_exact[2]
+
+
+p_value <- mean(abs(simulated_results$Test_Effect) >= abs(observed_test_effect))
+p_value
+```
+
