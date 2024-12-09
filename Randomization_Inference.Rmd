@@ -7,6 +7,8 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 library(dplyr)
+library(ggplot2)
+
 ```
 
 
@@ -16,31 +18,54 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 
-donations <- read.csv("/Users/monicanapoles/Downloads/alk_donations_total_ex_fee.csv", stringsAsFactors = FALSE)
+donations <- read.csv("/Users/monicanapoles/241-Final-Project/data/alk_donations_total_ex_fee.csv", stringsAsFactors = FALSE)
+
+#Filter undelivered emails 
+donations <- donations %>% filter(email_undelivered != 1)
 
 donations
 
+#quick check on emails opened
+df_email_counts <- donations %>%
+  group_by(test_name, email_opened) %>%
+  summarize(n = n())
+
+print(df_email_counts)
+
 ```
+
 ```{r}
 #keep only donations 
-donations_filtered <- donations %>% filter(!is.na(donation_amount_ex_fee))
+#donations_filtered <- donations %>% filter(!is.na(donation_amount_ex_fee))
 
-donations_filtered
+#donations_filtered
 ```
 
+```{r}
+#calculate the ATE
+
+observed_ate <- (3/19) - (0/17)
+
+observed_ate
+
+```
 
 ```{r}
 #assign binary to treatment and control 
 #calculate poportions of exact matches
-proportions <- donations_filtered %>%
-  mutate(exact_match = ifelse((test_name == "Test A" & donation_amount_ex_fee == 10) |
-                              (test_name == "Test B" & donation_amount_ex_fee == 13), 1, 0)) %>%
+proportions <- donations %>%
+  filter(email_opened == 1) %>%
+  mutate(exact_match = ifelse((test_name == "Test B" & donation_amount_ex_fee == 13) |
+                              (test_name == "Test A" & donation_amount_ex_fee == 10), 1, 0)) %>%
   group_by(test_name) %>%
   summarise(proportion_exact = mean(exact_match))
 
-# number of donations in each group
-group_sizes <- list("Test A" = 7, "Test B" = 5)
+#proportions
+
+# number of people who actually opened the email in each group (received treatment and received control)
+group_sizes <- list("Test A" = 17, "Test B" = 19)
 ```
+
 
 ```{r}
 simulate_exact_matches <- function(simulations = 1000, group_sizes) {
@@ -55,7 +80,7 @@ simulate_exact_matches <- function(simulations = 1000, group_sizes) {
   }
   
   sim_results <- sim_results %>%
-    mutate(Test_Effect = Test_A - Test_B)
+    mutate(Test_Effect = Test_B - Test_A)
   
   return(sim_results)
 }
@@ -63,8 +88,10 @@ simulate_exact_matches <- function(simulations = 1000, group_sizes) {
 ```
 
 ```{r}
+set.seed(42)
+
 # Simulate
-n_simulations <- 1000
+n_simulations <- 100000
 simulated_results <- simulate_exact_matches(n_simulations, group_sizes)
 
 observed_test_effect <- 
@@ -74,4 +101,31 @@ observed_test_effect <-
 p_value <- mean(abs(simulated_results$Test_Effect) >= abs(observed_test_effect))
 p_value
 ```
+```{r}
+
+ggplot(simulated_results, aes(x = Test_Effect)) +
+  geom_histogram(bins = 10, fill = "lightblue", color = "black", alpha = 0.9) +
+  geom_vline(xintercept = observed_ate, color = "red", linetype = "dashed", size = 1) +
+  labs(
+    title = "Simulated Test Effects vs. Observed Effect",
+    x = "Test Effect (Proportion Difference)",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+
+```
+
+The graph suggests no strong evidence to support a difference between the two groups which is in line with the simulated p-value. 
+
+
+
+The null hypothesis: there is no difference in the proportion of people who matched the suggested donation between the two groups. When calculating the proportions for the randomization inference, we are only consider the individuals who opened the email because we are interested in the effect of the treatment (suggested donation amount) on those who were exposed to it. With a p-value of 0.59617, we fail to reject the null of no difference in the proportion of people who matched the suggested donation between the two groups. 
+
+```{r}
+sd_simulated_test_effect <- sd(simulated_results$Test_Effect)
+
+# Print the standard deviation
+print(sd_simulated_test_effect)
+```
+
 
