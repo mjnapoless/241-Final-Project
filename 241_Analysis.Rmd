@@ -1,0 +1,134 @@
+---
+title: "241 Analysis"
+author: "Monica Napoles"
+date: "2024-12-08"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(pacman)
+p_load(data.table, sandwich, lmtest, stargazer, ggplot2, magrittr, knitr, dplyr)
+
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+donations <- read.csv("/Users/monicanapoles/241-Final-Project/data/alk_donations_total_ex_fee.csv", stringsAsFactors = FALSE)
+
+donations
+
+```
+```{r}
+donations_filtered <- donations %>% filter(email_undelivered != 1)
+
+donations_filtered
+```
+
+```{r}
+df_counts <- donations %>%
+  count(test_name)
+
+print(df_counts)
+
+#ITT
+itt <- (3/28) - (0/31)
+itt
+  
+```
+
+```{r}
+
+#CACE = ITT / Complier Proportion
+cace = ((3/28) - (0/31)) / (3/26)
+cace
+
+```
+The CACE of 0.9285714 indicates that people who received the email suggesting a 13 dollar donation and then donated 13 dollars gave an average of 0.93 more than those who wouldn't have donated regardless of the email. This suggests the email was effective in encouraging donations from those inclined to donate.
+```{r}
+#binary assignment of treatment and control as "test group"
+donations_filtered$test_group <- ifelse(donations_filtered$test_name == "Test B", 1, 0)
+
+donor_model <- lm(donation_amount_ex_fee ~ test_group + previous_amount_donated_1, data = donations_filtered)
+
+summary(donor_model)
+
+```
+With a coefficient of ~ -18.68, this means that donations are approximately 18.68 dollars lower in the Test B donors group compared to Test A donors when controlling for past donation amount. The p-value is 0.615 and is not significant at the 0.05 level. For every dollar increase in previous donation, we can expect ~0.26 cents increase to current donations on average, which is also insignificant with a p-value of 0.311. The R-squared value is relatively low at 0.199 so this model describes ~ 20% of the variance in donation amounts. #note to self weird that previous donation amount decreased r-squared so this may not be a good predictor
+
+```{r}
+stargazer(donor_model, type = "text", title = "Regression of Test Assignment & Previous Donation Amount on Current Donation", 
+          align = TRUE, digits = 2, single.row = TRUE)
+
+#edit stargazer for variable name readability 
+```
+```{r}
+plot(donations_filtered$previous_amount_donated_1, donations_filtered$donation_amount_ex_fee)
+#this graph shows how these two variables aren't very related 
+#can change variable names and make it prettier if we use it 
+
+```
+##Regression for test assignment wihout previous donation 
+```{r}
+#running separate regressions for test a & test b
+
+model_test_a <- lm(donation_amount_ex_fee ~ 1, 
+                   data = donations_filtered %>% filter(test_group == 0))
+
+
+model_test_b <- lm(donation_amount_ex_fee ~ 1, 
+                   data = donations_filtered %>% filter(test_group == 1))
+
+
+summary(model_test_a)
+summary(model_test_b)
+
+```
+Donations in Test A are around 19.17 on average.Donations in Test B are on average 9.19. 
+```{r}
+#combined test group model w/out previous donation 
+combined_simple_model <- lm(donation_amount_ex_fee ~ test_group, data = donations_filtered)
+
+# F-test 
+anova(combined_simple_model)
+
+```
+From the F-test it seems that the test group variable does not significantly explain the variation in donation amounts. The donation amounts between the two groups is not significant with a p-value of 0.3293. 
+
+
+##Regression for test assignment with previous donation as interaction term 
+```{r}
+#running separate regressions for test a & test b w/ previous donation as interaction 
+
+model_test_a_control <- lm(donation_amount_ex_fee ~ previous_amount_donated_1, 
+                   data = donations_filtered %>% filter(test_group == 0))
+
+
+model_test_b_control <- lm(donation_amount_ex_fee ~ previous_amount_donated_1, 
+                   data = donations_filtered %>% filter(test_group == 1))
+
+
+summary(model_test_a_control)
+summary(model_test_b_control)
+```
+In test a, for each additional unit increase in previous donation amount, we can expect an increase of ~ 0.18 in current donations but this is not statistically significant with a p-value of 0.5553. It seems that the previous donation amount is not predictive of current donation amount in test a. 
+
+In test b, for each additional unit increase in previous donation amount, we can expect an increase of ~ 1.63 in current donations and this is statistically significant with a p-value of 0.0332. In test b, previous donation amount may be predictive of current donation. 
+```{r}
+#with previous donation as interaction 
+combined_model_control <- lm(donation_amount_ex_fee ~ test_group * previous_amount_donated_1, data = donations_filtered)
+
+# F-test 
+anova(combined_model_control)
+```
+For the test group alone: the test group is not significant and is not predictive of donation amount on it's own, regardless of previous donation. 
+
+For previous amount donated: this does not significantly predict current donations with a p-value of 0.2917. 
+
+For the interaction of test group and previous donation amount: the previous donation amount does not affect current donation amount significantly between either group. 
+
+
+
